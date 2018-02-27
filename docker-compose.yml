@@ -21,7 +21,7 @@ services:
     environment:
       SQL_PASSWORD: root
       SQL_USER: root
-      SQL_DATABASE: db
+      SQL_DATABASE: blog
       SQL_HOST: mysql
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
@@ -36,6 +36,6 @@ services:
     image: mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: db
+      MYSQL_DATABASE: blog
     volumes:
       - ./db:/var/lib/mysql

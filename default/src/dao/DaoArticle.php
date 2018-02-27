@@ -1,7 +1,7 @@
 <?php
 
 namespace simplon\dao;
-use simplon\entities\Person;
+use simplon\entities\Article;
 use simplon\dao\Connect;
 /**
  * Un Dao, pour Data Access Object, est une classe dont le but est de faire
@@ -11,12 +11,12 @@ use simplon\dao\Connect;
  * (comme ça, si on change de SGBD, ou de table, ou de database, on aura
  * juste le DAO à modifier et le reste de notre appli restera inchangé)
  */
-class DaoPerson {
+class DaoArticle {
     
     
     /**
      * La méthode getAll renvoie toutes les persons stockées en bdd
-     * @return Person[] la liste des person ou une liste vide
+     * @return Users[] la liste des person ou une liste vide
      */
     public function getAll():array {
         //On commence par créer un tableau vide dans lequel on stockera
@@ -36,7 +36,7 @@ class DaoPerson {
             une requête SQL (elle n'est pas envoyée tant qu'on ne lui dit pas)
             La méthode prepare attend en argument une string SQL
             */
-            $query = Connect::getInstance()->prepare('SELECT * FROM person');
+            $query = Connect::getInstance()->prepare('SELECT * FROM articles');
             //On dit à notre requête de s'exécuter, à ce moment là, le résultat
             //de la requête est disponible dans la variable $query
             $query->execute();
@@ -55,12 +55,15 @@ class DaoPerson {
                 Les index de $row correspondent aux noms de colonnes dans notre
                 SQL.
                 */
-                $pers = new Person($row['name'], 
-                            new \DateTime($row['birth_date']), 
-                            $row['gender'],
+                $article = new Article($row['title'], 
+                            $row['description'], 
+                            $row['id_user'],
+                            new \DateTime($row['dateCreated']),
+                            $row['image'],
+                            new \DateTime($row['dateUpdated']),
                             $row['id']);
                 //On ajoute la person créée à notre tableau
-                $tab[] = $pers;
+                $tab[] = $article;
             }
         }catch(\PDOException $e) {
             echo $e;
@@ -68,10 +71,43 @@ class DaoPerson {
         //On return le tableau
         return $tab;
     }
+
+    public function getAllByUserId(int $user_id) {
+        
+        $tab = [];
+        
+        try {
+            
+            $query = Connect::getInstance()->prepare('SELECT * FROM articles INNER JOIN users ON users.id = articles.id_user
+            WHERE users.id = :user_id');
+            
+            $query->bindValue(':user_id', $user_id, \PDO::PARAM_INT);
+
+            $query->execute();
+            
+            while($row = $query->fetch()) {
+               
+                $article = new Article($row['title'], 
+                            $row['description'], 
+                            $row['id_user'],
+                            new \DateTime($row['dateCreated']),
+                            $row['image'],
+                            new \DateTime($row['dateUpdated']),
+                            $row['id']);
+                //On ajoute la person créée à notre tableau
+                $tab[] = $article;
+            }
+        }catch(\PDOException $e) {
+            echo $e;
+        }
+        //On return le tableau
+        return $tab;
+    }
+
     /**
      * Méthode permettant de récupérer une Person en se basant sur
      * son Id
-     * @return Person|null renvoie soit la Person correspondante soit null
+     * @return Article|null renvoie soit la Person correspondante soit null
      * si pas de match
      */
     public function getById(int $id) {
@@ -86,7 +122,7 @@ class DaoPerson {
              * A la place, on met un placeholder dans la requête auquel on
              * donne un label précédé de :, par exemple :id
              */
-            $query = Connect::getInstance()->prepare('SELECT * FROM person WHERE id=:id');
+            $query = Connect::getInstance()->prepare('SELECT * FROM articles WHERE id=:id');
             /**
              * Chaque placeholder d'une requête doit être bindée, soit par
              * un bindValue, soit directement dans le execute via un 
@@ -101,12 +137,15 @@ class DaoPerson {
             //Si le fetch nous renvoie quelque chose
             if($row = $query->fetch()) {
                 //On crée une instance de Person
-                $pers = new Person($row['name'], 
-                            new \DateTime($row['birth_date']), 
-                            $row['gender'],
+                $article = new Article($row['title'], 
+                            $row['description'], 
+                            $row['image'],
+                            new \DateTime($row['dateCreated']),
+                            new \DateTime($row['dateUpdated']),
+                            $row['id_user'],
                             $row['id']);
                 //On return cette Person
-                return $pers;
+                return $article;
             }
         }catch(\PDOException $e) {
             echo $e;
@@ -122,32 +161,36 @@ class DaoPerson {
      * Méthode permettant de faire persister en base de données une 
      * instance de Person passée en argument.
      */
-    public function add(Person $pers) {
+    public function add(Article $article) {
         
         try {
             //On prépare notre requête, avec les divers placeholders
-            $query = Connect::getInstance()->prepare('INSERT INTO person (name,birth_date,gender) VALUES (:name, :birth_date, :gender)');
+            $query = Connect::getInstance()->prepare('INSERT INTO articles (title, description, id_user, dateCreated, image)
+            VALUES (:title, :description, :id_user, :dateCreated, :image)');
+            
             /**
              * On bind les différentes values qu'on récupère de l'instance
              * de Person qui nous est passée en argument, via ses
              * accesseurs get*()
              */
-            $query->bindValue(':name',$pers->getName(),\PDO::PARAM_STR);
+            $query->bindValue(':title',$article->getTitle(),\PDO::PARAM_STR);
             /**
              * Pour la date, PDO attend une date en string au format 
              * aaaa-mm-dd, hors, la birthdate de notre Person est une
              * instance de DateTime, on utilise donc la méthode format()
              * de DateTime pour la convertir au format textuel souhaité.
              */
-            $query->bindValue(':birth_date',$pers->getBirthdate()->format('Y-m-d'),\PDO::PARAM_STR);
-            $query->bindValue(':gender',$pers->getGender(),\PDO::PARAM_INT);
-
+            $query->bindValue(':description',$article->getDescription(),\PDO::PARAM_STR);
+            $query->bindValue(':image',$article->getImage(),\PDO::PARAM_LOB);
+            $query->bindValue(':dateCreated',$article->getDateCreated()->format('Y-m-d'),\PDO::PARAM_STR);
+            $query->bindValue(':id_user',$article->getIdUser(),\PDO::PARAM_INT);
+            
             $query->execute();
             /**
              * On fait en sorte de récupérer le dernier id généré par SQL 
              * afin de l'assigner à l'id de notre instance de Person
              */
-            $pers->setId(Connect::getInstance()->lastInsertId());
+            $article->setId(Connect::getInstance()->lastInsertId());
             
         }catch(\PDOException $e) {
             echo $e;
@@ -159,23 +202,23 @@ class DaoPerson {
      * L'argument $pers doit être une instance de Person complète, avec
      * un id existant en base.
      */
-    public function update(Person $pers) {
+    public function update(Article $article) {
         
         try {
             //toujours pareil, on prépare la requête
-            $query = Connect::getInstance()->prepare('UPDATE person SET name = :name, birth_date = :birth_date, gender = :gender WHERE id = :id');
+            $query = Connect::getInstance()->prepare('UPDATE article SET title = :title, description = :description, user_id = :user_id, image = :image, dateCreated = :dateCreated, dateUpdated = :dateUpdated WHERE id = :id');
             //on bind les value des placeholders
-            $query->bindValue(':name',$pers->getName(),\PDO::PARAM_STR);
+            $query->bindValue(':title',$user->getTitle(),\PDO::PARAM_STR);
             
-            $query->bindValue(':birth_date',$pers->getBirthdate()->format('Y-m-d'),\PDO::PARAM_STR);
-            $query->bindValue(':gender',$pers->getGender(),
-            \PDO::PARAM_INT);
-            $query->bindValue(':id',$pers->getId(),
-            \PDO::PARAM_INT);
+            $query->bindValue(':description',$user->getDescription(),\PDO::PARAM_STR);
+            $query->bindValue(':user_id',$user->getIdUser(),\PDO::PARAM_INT);
+            $query->bindValue(':picture',$user->getPicture(),\PDO::PARAM_STR);
+            $query->bindValue(':dateCreated',$user->getDateCreated()->format('Y-m-d'),\PDO::PARAM_STR);
+            $query->bindValue(':dateUpdated',$user->getDateUpdated()->format('Y-m-d'),\PDO::PARAM_STR);
+            $query->bindValue(':id',$user->getId(), \PDO::PARAM_INT);
 
             //on exécute la requête
             $query->execute();
-            
             
         }catch(\PDOException $e) {
             echo $e;
@@ -190,7 +233,7 @@ class DaoPerson {
         
         try {
             //On prépare...
-            $query = Connect::getInstance()->prepare('DELETE FROM person WHERE id = :id');
+            $query = Connect::getInstance()->prepare('DELETE FROM articles WHERE id = :id');
             //on bind...
             $query->bindValue(':id',$id,\PDO::PARAM_INT);
 
